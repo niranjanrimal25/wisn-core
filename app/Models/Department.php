@@ -16,6 +16,11 @@ class Department extends Model
         return $this->hasMany(WorkloadActivity::class);
     }
 
+    public function operationalSnapshots()
+    {
+        return $this->hasMany(DepartmentOperationalSnapshot::class);
+    }
+
     protected function availableWorkingTimeHours(): Attribute
     {
         return Attribute::get(fn () =>

@@ -271,3 +271,41 @@ $hasSupport       = $activities->where('activity_type', 'support')->count() > 0;
 | DomPDF for PDF | Available as a Composer package, no external service, works with Blade templates. Constraint: inline CSS only. |
 | Chart.js via CDN | Avoids adding JS build complexity. Only loaded on the dashboard page via `@push('scripts')`. |
 | Seeder is destructive | Prototype assumption: simulated test data. Never run `db:seed` with real hospital data loaded. |
+
+---
+
+## Operational staffing overlay (added 2026-10)
+
+The `/operations` module is a separate shift-level decision-support flow. It does not change `WisnCalculatorService`, annual activity volumes, AWT, WISN ratios, or `departments.current_staff`.
+
+### Operational data model
+
+- `operational_rounds`: timestamp and user for one manually entered facility-wide snapshot.
+- `department_operational_snapshots`: one row per department and round; stores aggregate patient count, high-acuity count, on-duty staff, locally assessed required on-duty staff, and notes.
+- `mobilization_recommendations`: aggregate count proposal from one department to another, with pending/approved/declined/superseded status and reviewer audit fields.
+
+No dedicated patient-identifier fields or named nurse roster are stored. Free-text notes are available, so users are instructed not to enter patient identifiers. `required_on_duty_staff` must come from the facility's locally approved shift policy; the prototype intentionally does not invent patient-to-nurse ratios. High-acuity counts are context only in this iteration.
+
+### Operational request flow
+
+```text
+POST /operations/snapshots
+  → OperationalSnapshotController
+  → OperationalStaffingService::recordRound()
+  → append-only timestamped snapshots + count-level recommendations
+
+POST /operations/recommendations/{id}/approve|decline
+  → MobilizationRecommendationController
+  → OperationalStaffingService review with transaction/row locks
+  → audit status; do not change roster or department headcount
+```
+
+The recommendation allocator only moves counts above a sending unit's entered target to units below their entered target. A new snapshot supersedes pending proposals from older rounds. Approval is blocked if the snapshot is no longer the latest, has exceeded `OPERATIONS_STALE_AFTER_MINUTES` (default 30), or the approved count would breach the recorded source target or exceed the destination target. Departments with operational history cannot be hard-deleted; retain them so past snapshots and recommendations remain auditable. A later archive/deactivate flow can replace this prototype guard.
+
+### Current prototype limits and safety boundary
+
+- Census and shift staffing are manually entered; this is not an EHR/roster integration or push-based real-time feed. The UI marks the data as a manual snapshot and displays staleness.
+- Proposals are aggregate counts, not named nurse assignments. Competency, specialty, availability, legal shift rules, and actual execution still require human verification outside the application.
+- The app has no role/permission model beyond authenticated and verified users. The current approval route is therefore suitable for a prototype only; restrict approval to authorized nursing managers before operational deployment.
+- The snapshot's locally assessed required coverage is not an automatic clinical decision. Validate and configure the policy with the hospital before using recommendations.
+- Staff turnover remains a separate longer-term workforce-supply measure; it is not used as a live on-duty count or as an input to the WISN formula.

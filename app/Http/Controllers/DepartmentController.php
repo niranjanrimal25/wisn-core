@@ -74,6 +74,13 @@ class DepartmentController extends Controller
 
     public function destroy(Department $department)
     {
+        if ($department->operationalSnapshots()->exists()) {
+            return redirect()->route('departments.index')->with(
+                'error',
+                'This department has operational history and cannot be deleted. Keep it to preserve past staffing snapshots and recommendations.'
+            );
+        }
+
         $department->delete();
         return redirect()->route('departments.index')->with('success', 'Department deleted permanently.');
     }

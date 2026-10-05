@@ -6,17 +6,26 @@ use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\WorkloadActivityController;
 use App\Http\Controllers\HelpController;
+use App\Http\Controllers\MobilizationRecommendationController;
+use App\Http\Controllers\OperationalDashboardController;
+use App\Http\Controllers\OperationalSnapshotController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return view('welcome');
 });
 
-// Protect all these routes so only logged-in hospital managers can see them
+// Protect application workflows behind authentication and email verification.
 Route::middleware(['auth', 'verified'])->group(function () {
     
-    // The Main Dashboard
+    // The annual WISN planning dashboard
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+    // Shift-level operational coverage, separate from annual WISN calculations
+    Route::get('/operations', [OperationalDashboardController::class, 'index'])->name('operations.index');
+    Route::post('/operations/snapshots', [OperationalSnapshotController::class, 'store'])->name('operations.snapshots.store');
+    Route::post('/operations/recommendations/{recommendation}/approve', [MobilizationRecommendationController::class, 'approve'])->name('operations.recommendations.approve');
+    Route::post('/operations/recommendations/{recommendation}/decline', [MobilizationRecommendationController::class, 'decline'])->name('operations.recommendations.decline');
     
     // Department Management (The CRUD routes)
     Route::resource('departments', DepartmentController::class);
