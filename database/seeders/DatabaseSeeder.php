@@ -10,6 +10,8 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
+        $this->call(AdminUserSeeder::class);
+
         WorkloadActivity::query()->delete();
         Department::query()->delete();
 
@@ -25,8 +27,9 @@ class DatabaseSeeder extends Seeder
 
         // ICU — Expected WISN ratio ≈ 0.71 (Critical)
         $icu = Department::create(array_merge($awt, [
-            'name'          => 'Intensive Care Unit (ICU)',
-            'type'          => 'Inpatient - High Acuity',
+            'name'                  => 'Intensive Care Unit (ICU)',
+            'type'                  => 'Inpatient - High Acuity',
+            'operational_unit_type' => 'icu',
             'current_staff' => 6,
         ]));
         $icu->activities()->createMany([
@@ -41,8 +44,9 @@ class DatabaseSeeder extends Seeder
 
         // Emergency Department — Expected WISN ratio ≈ 0.91 (Borderline)
         $ed = Department::create(array_merge($awt, [
-            'name'          => 'Emergency Department',
-            'type'          => 'Emergency',
+            'name'                  => 'Emergency Department',
+            'type'                  => 'Emergency',
+            'operational_unit_type' => 'emergency_inpatient',
             'current_staff' => 7,
         ]));
         $ed->activities()->createMany([
@@ -58,7 +62,8 @@ class DatabaseSeeder extends Seeder
         // General Medical Ward — Expected WISN ratio ≈ 0.78 (Critical)
         $medWard = Department::create(array_merge($awt, [
             'name'          => 'General Medical Ward',
-            'type'          => 'Inpatient - Standard',
+            'type'                  => 'Inpatient - Standard',
+            'operational_unit_type' => 'general_ward',
             'current_staff' => 11,
         ]));
         $medWard->activities()->createMany([
@@ -74,7 +79,8 @@ class DatabaseSeeder extends Seeder
         // Surgical Ward — Expected WISN ratio ≈ 1.05 (Adequate)
         $surgWard = Department::create(array_merge($awt, [
             'name'          => 'Surgical Ward',
-            'type'          => 'Surgical/OT',
+            'type'                  => 'Surgical/OT',
+            'operational_unit_type' => 'surgical_ward',
             'current_staff' => 10,
         ]));
         $surgWard->activities()->createMany([

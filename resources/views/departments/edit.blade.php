@@ -64,17 +64,30 @@
                                             class="w-full rounded-lg border-gray-200 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm">
                                             <option value="" disabled>Select type...</option>
                                             @foreach(['Inpatient - Standard','Inpatient - High Acuity','Outpatient','Emergency','Surgical/OT'] as $opt)
-                                                <option value="{{ $opt }}" {{ old('type', $department->type) == $opt ? 'selected' : '' }}>{{ $opt }}</option>
+                                                <option value="{{ $opt }}" {{ old('type', $department->type) === $opt ? 'selected' : '' }}>{{ $opt }}</option>
                                             @endforeach
                                         </select>
                                     </div>
                                     <div>
+                                        <label for="operational_unit_type" class="block text-sm font-semibold text-gray-700 mb-1">
+                                            Operations Unit Classification <span class="text-red-400">*</span>
+                                        </label>
+                                        <select name="operational_unit_type" id="operational_unit_type" required
+                                            class="w-full rounded-lg border-gray-200 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm">
+                                            @foreach($operationalUnitTypes as $value => $label)
+                                                <option value="{{ $value }}" {{ old('operational_unit_type', $department->operational_unit_type) === $value ? 'selected' : '' }}>{{ $label }}</option>
+                                            @endforeach
+                                        </select>
+                                        <p class="text-xs text-gray-500 mt-1">Outpatient is excluded from Operations; Emergency counts are admitted/observation-bed patients only.</p>
+                                    </div>
+                                    <div>
                                         <label for="current_staff" class="block text-sm font-semibold text-gray-700 mb-1">
-                                            Current Nurses <span class="text-red-400">*</span>
+                                            Current Staff Headcount (WISN) <span class="text-red-400">*</span>
                                         </label>
                                         <input type="number" name="current_staff" id="current_staff" value="{{ old('current_staff', $department->current_staff) }}" min="0" required
                                             class="w-full rounded-lg border-gray-200 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
                                             placeholder="e.g., 12">
+                                        <p class="mt-1 text-xs text-gray-500">Planning headcount used by annual WISN; it is not the number actually on duty at a handover.</p>
                                     </div>
                                 </div>
                             </div>

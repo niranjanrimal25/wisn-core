@@ -61,21 +61,33 @@
                                         </label>
                                         <select name="type" id="type" required
                                             class="w-full rounded-lg border-gray-200 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm">
-                                            <option value="" disabled selected>Select type...</option>
-                                            <option value="Inpatient - Standard" {{ old('type') == 'Inpatient - Standard' ? 'selected' : '' }}>Inpatient - Standard</option>
-                                            <option value="Inpatient - High Acuity" {{ old('type') == 'Inpatient - High Acuity' ? 'selected' : '' }}>Inpatient - High Acuity (ICU/CCU)</option>
-                                            <option value="Outpatient" {{ old('type') == 'Outpatient' ? 'selected' : '' }}>Outpatient</option>
-                                            <option value="Emergency" {{ old('type') == 'Emergency' ? 'selected' : '' }}>Emergency</option>
-                                            <option value="Surgical/OT" {{ old('type') == 'Surgical/OT' ? 'selected' : '' }}>Surgical / Operating Theater</option>
+                                            <option value="" disabled {{ old('type') ? '' : 'selected' }}>Select type...</option>
+                                            @foreach(['Inpatient - Standard','Inpatient - High Acuity','Outpatient','Emergency','Surgical/OT'] as $opt)
+                                                <option value="{{ $opt }}" {{ old('type') === $opt ? 'selected' : '' }}>{{ $opt }}</option>
+                                            @endforeach
                                         </select>
                                     </div>
                                     <div>
+                                        <label for="operational_unit_type" class="block text-sm font-semibold text-gray-700 mb-1">
+                                            Operations Unit Classification <span class="text-red-400">*</span>
+                                        </label>
+                                        <select name="operational_unit_type" id="operational_unit_type" required
+                                            class="w-full rounded-lg border-gray-200 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm">
+                                            <option value="" disabled {{ old('operational_unit_type') ? '' : 'selected' }}>Select nursing unit...</option>
+                                            @foreach($operationalUnitTypes as $value => $label)
+                                                <option value="{{ $value }}" {{ old('operational_unit_type') === $value ? 'selected' : '' }}>{{ $label }}</option>
+                                            @endforeach
+                                        </select>
+                                        <p class="text-xs text-gray-500 mt-1">Outpatient is excluded from Operations; Emergency counts are admitted/observation-bed patients only.</p>
+                                    </div>
+                                    <div>
                                         <label for="current_staff" class="block text-sm font-semibold text-gray-700 mb-1">
-                                            Current Nurses <span class="text-red-400">*</span>
+                                            Current Staff Headcount (WISN) <span class="text-red-400">*</span>
                                         </label>
                                         <input type="number" name="current_staff" id="current_staff" value="{{ old('current_staff', 0) }}" min="0" required
                                             class="w-full rounded-lg border-gray-200 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm"
                                             placeholder="e.g., 12">
+                                        <p class="mt-1 text-xs text-gray-500">Planning headcount used by annual WISN; it is not the number actually on duty at a handover.</p>
                                     </div>
                                 </div>
                             </div>

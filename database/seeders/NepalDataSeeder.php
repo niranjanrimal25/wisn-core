@@ -38,8 +38,9 @@ class NepalDataSeeder extends Seeder
         // Expected WISN ratio: ~0.75 (Critical)
         // =========================================================================
         $icu = Department::create(array_merge($awt, [
-            'name'          => 'Intensive Care Unit (ICU)',
-            'type'          => 'Inpatient - High Acuity',
+            'name'                  => 'Intensive Care Unit (ICU)',
+            'type'                  => 'Inpatient - High Acuity',
+            'operational_unit_type' => 'icu',
             'current_staff' => 12,  // NHFS median elevated for ICU
         ]));
 
@@ -98,7 +99,8 @@ class NepalDataSeeder extends Seeder
         // =========================================================================
         $ed = Department::create(array_merge($awt, [
             'name'          => 'Emergency Department',
-            'type'          => 'Emergency',
+            'type'                  => 'Emergency',
+            'operational_unit_type' => 'emergency_inpatient',
             'current_staff' => 10,  // NHFS median for provincial hospital
         ]));
 
@@ -156,8 +158,9 @@ class NepalDataSeeder extends Seeder
         // Expected WISN ratio: ~0.70 (Critical)
         // =========================================================================
         $medWard = Department::create(array_merge($awt, [
-            'name'          => 'General Medical Ward',
-            'type'          => 'Inpatient - Standard',
+            'name'                  => 'General Medical Ward',
+            'type'                  => 'Inpatient - Standard',
+            'operational_unit_type' => 'general_ward',
             'current_staff' => 8,  // NHFS local hospital median
         ]));
 
@@ -216,7 +219,8 @@ class NepalDataSeeder extends Seeder
         // =========================================================================
         $maternity = Department::create(array_merge($awt, [
             'name'          => 'Maternity Ward',
-            'type'          => 'Inpatient - Maternity',
+            'type'                  => 'Inpatient - Maternity',
+            'operational_unit_type' => 'maternity_ward',
             'current_staff' => 8,  // Standard for 50-bed maternity
         ]));
 
@@ -275,7 +279,8 @@ class NepalDataSeeder extends Seeder
         // =========================================================================
         $opd = Department::create(array_merge($awt, [
             'name'          => 'Outpatient Department (OPD)',
-            'type'          => 'Outpatient',
+            'type'                  => 'Outpatient',
+            'operational_unit_type' => 'outpatient',
             'current_staff' => 6,  // Standard for high-volume OPD
         ]));
 

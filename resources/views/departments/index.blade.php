@@ -3,9 +3,9 @@
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
             <div>
                 <h2 class="font-bold text-xl text-gray-800">
-                    Hospital Departments
+                    Hospital Departments &amp; Nursing Units
                 </h2>
-                <p class="text-sm text-gray-500 mt-0.5">Manage departments and their staffing parameters</p>
+                <p class="text-sm text-gray-500 mt-0.5">Manage annual WISN departments and classify inpatient units for Operations</p>
             </div>
             <a href="{{ route('departments.create') }}"
                 class="inline-flex items-center gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-semibold py-2 px-4 rounded-lg shadow-sm text-sm transition-all">
@@ -44,7 +44,7 @@
                             <tr class="bg-gray-50/80">
                                 <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Department</th>
                                 <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Type</th>
-                                <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Nurses</th>
+                                <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">WISN Headcount</th>
                                 <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">AWT (hrs)</th>
                                 <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Activities</th>
                                 <th class="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
@@ -58,6 +58,7 @@
                                     </td>
                                     <td class="px-5 py-4">
                                         <span class="text-sm text-gray-600">{{ $department->type ?? '—' }}</span>
+                                        <span class="mt-1 block text-xs text-gray-500">{{ \App\Models\Department::OPERATIONAL_UNIT_TYPES[$department->operational_unit_type] ?? $department->operational_unit_type }}</span>
                                     </td>
                                     <td class="px-5 py-4">
                                         <span class="inline-flex items-center gap-1 text-sm font-semibold text-gray-900">

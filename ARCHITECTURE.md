@@ -271,3 +271,54 @@ $hasSupport       = $activities->where('activity_type', 'support')->count() > 0;
 | DomPDF for PDF | Available as a Composer package, no external service, works with Blade templates. Constraint: inline CSS only. |
 | Chart.js via CDN | Avoids adding JS build complexity. Only loaded on the dashboard page via `@push('scripts')`. |
 | Seeder is destructive | Prototype assumption: simulated test data. Never run `db:seed` with real hospital data loaded. |
+
+---
+
+## Operational inpatient census and shift staffing (added 2026-10)
+
+The `/operations` module is a separate inpatient coverage view. It does not change `WisnCalculatorService`, annual activity volumes, AWT, WISN ratios, or `departments.current_staff`.
+
+### Operational data model
+
+- `departments.operational_unit_type` classifies inpatient nursing units (general, pediatric, maternity, surgical, ICU, PICU, NICU, Emergency admitted/observation beds, or other inpatient). `outpatient` is explicitly excluded from Operations.
+- `operational_staffing_standards` is a configurable lookup table keyed by unit type and day/night shift. It records patients per nurse, optional minimum nurses, source, version, effective dates, active status, and the administrator who approved it and when. No ratio is seeded or assumed.
+- `operational_rounds` records the midnight/day/night census date and code, scheduled observation time, actual capture timestamp, and entering user. Corrections create a new version; older rounds remain in the database.
+- `department_operational_snapshots` stores one directly observed unit count per round: patients at handover, actual on-duty nurses for 7 AM/7 PM only, the applicable standard ID, and the calculated required nurse count where a standard applies. Legacy manual-target columns remain nullable for migration compatibility and are not used by new code.
+- `mobilization_recommendations` stores aggregate count proposals between units with pending/approved/declined/superseded status and reviewer audit fields.
+
+No patient identifiers or named nurse roster are stored. Free-text notes are available, so users are instructed not to enter patient identifiers. Emergency counts are intended for admitted or observation-bed patients only, not walk-in visits.
+
+### Operational request flow
+
+```text
+GET  /operations?date=YYYY-MM-DD&shift=midnight|day|night
+  → OperationalDashboardController
+  → latest revision for each fixed handover on that date
+  → resources/views/operations/index.blade.php
+
+POST /operations/snapshots
+  → OperationalSnapshotController (validates complete inpatient-unit set)
+  → OperationalStaffingService::recordRound()
+  → direct observed snapshots + applicable standards + count-level suggestions
+
+GET/POST/PATCH /operations/standards (admin only)
+  → OperationalStaffingStandardController
+  → source-backed target configuration and approval history
+
+POST /operations/recommendations/{id}/approve|decline
+  → MobilizationRecommendationController
+  → OperationalStaffingService review with transaction/row locks
+```
+
+The daily cycle is 12:00 AM to 11:59 PM. Census is entered as observed separately at 12:00 AM, 7:00 AM, and 7:00 PM; it is not derived from admissions, discharges, or transfers. Day/night staffing requirements are calculated only from an active, approved, effective unit-and-shift standard using `max(minimum nurses, ceil(observed patients / patients per nurse))`. Without a standard, the required count is blank and that unit is not used for a mobilization proposal.
+
+A new round or a change to an activated staffing standard supersedes unreviewed suggestions. Potential mobilization is an aggregate calculation only; review is blocked if the round is not latest, is older than `OPERATIONS_RECOMMENDATION_FRESHNESS_MINUTES` (default 30), the inpatient-unit set or applicable standard changed, or the proposed count would breach a recorded source/destination requirement. Approval records a review; it does not assign a nurse, change actual counts, update the roster, or affect annual WISN. Departments with operational history cannot be hard-deleted so past rounds remain auditable.
+
+### Current prototype limits and safety boundary
+
+- Counts are manually entered; this is not an EHR/roster integration or push-based real-time feed. It does not calculate handover census from movement events.
+- Ratios are not universal defaults. A facility administrator must enter and activate a locally approved source-backed standard before a requirement is calculated.
+- Proposals are aggregate counts, not named nurse assignments. Competency, specialty, patient acuity, availability, legal shift rules, and actual execution still require qualified human verification.
+- Standard configuration is restricted to the administrator role. Regular authenticated users can record census and review potential moves; approval is not an automatic deployment.
+- This remains a prototype and is not a clinical staffing order. Validate local policy and operational governance before use.
+- Staff turnover remains a separate longer-term workforce-supply measure; it is not used as a live on-duty count or as an input to the WISN formula.

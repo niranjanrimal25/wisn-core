@@ -15,6 +15,7 @@ class WisnDataSeeder extends Seeder
         $icu = Department::create([
             'name' => 'Intensive Care Unit (ICU)',
             'type' => 'Inpatient - High Acuity',
+            'operational_unit_type' => 'icu',
             'current_staff' => 14, // Common staffing level for a mid-sized ICU in Kathmandu
             'working_days_per_year' => 260,
             'public_holidays'       => 13,
@@ -56,6 +57,7 @@ class WisnDataSeeder extends Seeder
         $generalWard = Department::create([
             'name' => 'General Medical Ward',
             'type' => 'Inpatient - Standard',
+            'operational_unit_type' => 'general_ward',
             'current_staff' => 18,
             'working_days_per_year' => 260,
             'public_holidays'       => 13,
