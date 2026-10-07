@@ -4,7 +4,7 @@
 
 **Audience:** A first-time presenter with little or no Laravel experience<br>
 **Purpose:** Teach what the project does, how its code and data fit together, what technologies it uses, and how to answer likely academic questions.<br>
-**Repository basis:** `niranjanrimal25/wisn-core`, reviewed against commit `51e5d75` on 5 October 2026.
+**Repository basis:** `niranjanrimal25/wisn-core`, reviewed on 7 October 2026 against the current Operations redesign and architecture notes.
 
 > **Use this guide honestly.** It describes the code that is in this repository. It separates the annual WISN planning calculation from the newer, manual shift-operations prototype. It does not claim that the application is connected to a hospital EHR, contains real patient records, or automatically assigns nurses.
 
@@ -640,39 +640,32 @@ Ask the learner to trace both paths back without reading. If they can say what e
 
 ---
 
-## 13. How to run a local demonstration
+## 13. Local run and the current empty-database setup
 
-The person presenting should rehearse in the same environment they will use on presentation day. A typical local setup needs PHP 8.1+, Composer, Node/npm, and a configured database.
+A typical development machine needs PHP 8.1+, Composer, Node/npm, and a database configured in `.env`. This user’s current test database is already migrated and has a single administrator account; there is no need to migrate or seed again before following Section 14.
 
-```text
-1. Clone the repository.
-2. Copy .env.example to .env and set the database connection.
-3. Run composer install.
-4. Run php artisan key:generate.
-5. Run npm install, then npm run build (or npm run dev during development).
-6. Run php artisan migrate.
-7. Seed only a disposable demo database if sample data are needed.
-8. Run php artisan serve and open the local URL in a browser.
-9. Log in, then demonstrate Dashboard, Departments, Activities, Operations, and Report.
-```
-
-Typical commands:
+If you need to start the local web process, run:
 
 ```bash
-composer install
-cp .env.example .env
-php artisan key:generate
-npm install
-npm run build
-php artisan migrate
-php artisan db:seed
 php artisan serve
-php artisan test
 ```
 
-**Demo login:** the `DatabaseSeeder` calls `AdminUserSeeder`, which creates `Admin Wisn` (`admin@wisn.org`) with the demo password `password` and administrator access. For an account only, run `php artisan db:seed --class=AdminUserSeeder`. This password is for local demonstration only; change it and secure the account before any deployment. No staffing ratio is seeded, so use only a locally approved target or demonstrate the intentionally blank requirement.
+In another terminal, if browser assets are not already built, run:
 
-**Seed warning:** the current `DatabaseSeeder` deletes existing workload activities and departments before inserting its demo set. Run it only against a disposable local/demo database. Do not run it against real operational data. Departments with operational history are protected from hard deletion in the application.
+```bash
+npm install
+npm run dev
+```
+
+Open the URL printed by `php artisan serve`, then visit `/login`.
+
+> **For the current manual-from-zero test: do not run `php artisan migrate:fresh` again and do not run `php artisan db:seed`.** `migrate:fresh` deletes all database rows before recreating tables. `DatabaseSeeder` calls the demo admin seeder, then deletes workload activities and departments before inserting its sample departments and activities. Running it would replace the clean manual-data exercise with demo data. No staffing ratios are seeded in any case.
+
+If you intentionally want a disposable sample-data database later, use `php artisan db:seed` only after confirming the database contains no data you need. The `AdminUserSeeder` alone creates/updates the demo account `admin@wisn.org` and resets its password to the repository's demo password `password`; it does not add departments or activities. Do not use that password outside local demonstration, and do not re-run that seeder if you have already changed the admin password and want to keep it.
+
+The application menus are rendered by `resources/views/layouts/navigation.blade.php`. The primary order for a manual clean-data test is: **login → Departments → Activities → Dashboard → Report/PDF → Operations → Profile → logout**. Operations target configuration is an admin-only subpage. The separate click-by-click and code-path test is in the next section.
+
+**Seed warning:** the current `DatabaseSeeder` is destructive to department/activity data. Never run it against real hospital or operational data. It also does not create staffing standards; local approval and entry are required before ratios are used.
 
 ### Demo order (about 4–6 minutes)
 
@@ -689,7 +682,292 @@ Emergency counts must be admitted/observation-bed patients only; OPD and walk-in
 
 ---
 
-## 14. Security, testing, and quality questions
+## 14. Hands-on walkthrough: test from an empty database
+
+This is the practical lab to follow in the browser. It assumes the database has already been migrated and contains only the administrator account, as in the current test setup. It deliberately creates data through the user interface so you can see how each form maps to Laravel code.
+
+> **Safe test-data rule:** use the sample workloads and operational standards below only in a disposable local practice database. They are teaching numbers, not clinically approved workload volumes or patient-to-nurse ratios. In a real facility, enter only locally verified data and an approved staffing standard. Do not enter patient names or other identifiers.
+
+### Step 0 — Confirm the starting point
+
+Before clicking around, check the premise:
+
+- You can log in with the administrator account that already exists.
+- There are no departments or activities yet, and no operational standards are configured.
+- You already ran `php artisan migrate:fresh`; do not run it again during the walkthrough.
+- Do not run `php artisan db:seed` for this manual exercise. `DatabaseSeeder` deletes department and activity rows and then inserts a sample data set. `AdminUserSeeder` alone is also unnecessary if the admin already exists; rerunning it resets that demo account's password.
+
+If the web app is not running, start it from the repository root with `php artisan serve`. Open the URL printed in the terminal. If Vite assets are not built, run `npm run dev` in another terminal. These commands do not reset the database.
+
+### Step 1 — Log in and arrive at the dashboard
+
+1. Open `/login` and enter the existing admin credentials.
+2. The browser first makes `GET /login`. `routes/auth.php` maps it to `AuthenticatedSessionController@create`, which returns `resources/views/auth/login.blade.php`.
+3. Submitting the form sends `POST /login`. `AuthenticatedSessionController@store` calls `LoginRequest::authenticate()`, regenerates the session ID, and redirects to the intended page. The normal home path is `/dashboard` (`RouteServiceProvider::HOME`).
+4. `GET /dashboard` is registered in `routes/web.php` as `dashboard`. It passes through the authenticated application middleware and reaches `DashboardController@index`.
+5. `DashboardController` loads departments and their activities. With none present, the page should show an empty/zero-data state. It cannot calculate a meaningful department requirement until data is added.
+
+**Show in the editor:** `routes/auth.php` → `app/Http/Controllers/Auth/AuthenticatedSessionController.php` → `app/Http/Requests/Auth/LoginRequest.php` → `app/Providers/RouteServiceProvider.php` → `routes/web.php` → `app/Http/Controllers/DashboardController.php`.
+
+**Say:** “The login page is a GET request. The form submits a POST. Laravel checks the credentials, refreshes the session, and sends me to the dashboard. The dashboard is empty because we have not created any departments yet.”
+
+### Step 2 — Open Departments and inspect the empty list
+
+1. Use the navigation link **Departments**. It points to `route('departments.index')`, which is `GET /departments`.
+2. `Route::resource('departments', DepartmentController::class)` in `routes/web.php` maps the request to `DepartmentController@index`.
+3. The controller runs `Department::withCount('activities')->get()` and passes the result to `resources/views/departments/index.blade.php`.
+4. With no rows, the view offers **Add First Department**. No department or activity row is created merely by opening the page.
+
+**Show:** the navigation link, the resource route, `DepartmentController@index`, the `Department` model, and the empty-state branch in `departments/index.blade.php`.
+
+### Step 3 — Add the first department
+
+Click **Add First Department** or **Add Department**. This is `GET /departments/create`, named `departments.create`. `DepartmentController@create` sends the available Operations classifications to `resources/views/departments/create.blade.php`.
+
+The form has two separate “type” concepts. Their source and purpose are different:
+
+| Form field | Where the options/data originate | What it means |
+|---|---|---|
+| Department Name | Text typed by the user; saved in `departments.name`. | A readable name, such as “Medical Ward.” |
+| Department Type (`type`) | The select options are an array written directly in the Blade form: `Inpatient - Standard`, `Inpatient - High Acuity`, `Outpatient`, `Emergency`, `Surgical/OT`. | A broad WISN/report grouping. It is not the key used to look up an Operations target. The current controller validates this as a required string; it does not validate against that Blade list. |
+| Operations Unit Classification (`operational_unit_type`) | `DepartmentController` passes `Department::OPERATIONAL_UNIT_TYPES` from `app/Models/Department.php` to the view. | A code used by Operations to distinguish General Ward, Surgical Ward, ICU, PICU, NICU, Emergency admitted/observation beds, OPD, and other units. Outpatient is excluded from Operations. |
+| Current Staff Headcount (WISN) | A whole-number input saved as `departments.current_staff`. | Annual/establishment headcount for WISN. It is **not** the number of nurses actually present at a 7 AM or 7 PM handover. |
+| Working Days/Year | An editable form input; create form starts at 260. | Gross available workdays in the selected annual reference period. |
+| Public Holidays | Editable input; default 13. | Days deducted from gross workdays. |
+| Annual Leave Days | Editable input; default 18. | Days deducted from gross workdays. |
+| Sick Leave Days | Editable input; default 12. | Days deducted from gross workdays. |
+| Training Days | Editable input; default 5. | Days deducted from gross workdays. |
+| Working Hours/Day | Editable input; default 8. | Hours per working day. |
+| Available Working Time (AWT) | Not typed into a separate stored AWT field. The six values above are stored; `Department::availableWorkingTimeHours()` computes AWT. | Annual hours available for one nurse. The form's JavaScript preview is only a convenience; the server-side PHP accessor is used by calculations. |
+
+The defaults are examples that produce:
+
+```text
+(260 - 13 - 18 - 12 - 5) × 8 = 1,696 hours per nurse per year
+```
+
+They can be changed to match an approved planning method. The request is validated by `DepartmentController::validationRules()`. The controller also checks that leave/holiday/training deductions leave positive net working days. If the `type` is exactly `Outpatient`, it forces `operational_unit_type=outpatient`; if exactly `Emergency`, it forces `emergency_inpatient`.
+
+For a training-only example, make these three departments so we can test both WISN and the Operations filter:
+
+| Department Name | Department Type | Operations Unit Classification | WISN headcount | AWT inputs |
+|---|---|---|---:|---|
+| Medical Ward | Inpatient - Standard | General inpatient ward (`general_ward`) | 2 | Leave the example defaults for this first example. |
+| Surgical Ward | Surgical/OT | Surgical ward (`surgical_ward`) | 1 | Same example defaults. |
+| Outpatient Department (OPD) | Outpatient | Outpatient Department (`outpatient`) | 4 | Same example defaults. |
+
+These headcounts are invented only to exercise the screens. For an inpatient nursing unit, pick the appropriate unit classification even if the broad Department Type is different. The OPD row is useful for confirming that it appears in WISN department management but not in Operations.
+
+When you click **Save Department**, the browser sends `POST /departments` (named `departments.store`) with a CSRF token. `DepartmentController@store` validates the request, performs its net-AWT-days check and the Outpatient/Emergency mapping, then calls `Department::create($validated)`. Eloquent inserts one row in `departments`. The controller redirects to the department list with a success message. The page itself does not store the computed AWT number; it stores the six AWT inputs.
+
+**Exact code trace:** `routes/web.php` → `DepartmentController@create` / `DepartmentController@store` → `Department::OPERATIONAL_UNIT_TYPES` and `Department::create()` → `departments` table → `resources/views/departments/create.blade.php` / `departments/index.blade.php`.
+
+**Say:** “The Type list is a broad WISN label written in the Blade form. The Operations classification comes from a PHP constant in the Department model. Current Staff Headcount feeds annual WISN. The 1,696-hour AWT is calculated from the six stored fields, not copied from the browser preview.”
+
+If validation fails, Laravel returns to the form with errors and old input. The server rechecks everything even if the browser already displayed an AWT preview.
+
+### Step 4 — Open a department’s Activities page
+
+Return to `GET /departments`. Each row has an **Activities** action. It links to `route('activities.index', $department->id)`, a `GET /departments/{department}/activities` route registered explicitly in `routes/web.php`.
+
+`WorkloadActivityController@index` receives the `Department` through implicit route model binding, loads `$department->activities`, and returns `resources/views/activities/index.blade.php`. The page shows the relationship’s activity list (empty at first) and a WISN setup stepper. For a new department, the stepper highlights adding a health-service activity first.
+
+**Show:** `routes/web.php`, `WorkloadActivityController@index`, `Department::activities()`, `WorkloadActivity`, and the page's stepper in `resources/views/activities/index.blade.php`.
+
+### Step 5 — Add activities (use these fictional practice values)
+
+Add one activity of each type to **Medical Ward**. The figures below exist only to make a visible dashboard calculation; they are not clinical standards.
+
+| Activity name | Activity type | Time standard | Annual volume | Why this example is entered this way |
+|---|---|---:|---:|---|
+| Practice direct-care task | Health Service (`health_service`) | 0.50 hours | 6,000 | Direct service workload uses time per occurrence and annual volume. |
+| Practice shift handover | Support (`support`) | 0.50 hours per shift | Leave blank | The code uses support time as a fraction of each working shift; no annual-volume count is required. |
+| Practice teaching task | Additional (`additional`) | 0.25 hours | 160 | Additional allowance uses annual hours (`volume × time`) in the current service. |
+
+To save an activity, fill in the form and click **Add Activity**. The browser sends `POST /departments/{department}/activities` (for example, named `activities.store`). `WorkloadActivityController@store` validates the name, type, time, and required annual-volume rule. It creates the record through `$department->activities()->create($validated)`, which sets the department foreign key. Eloquent inserts into `workload_activities`; the controller redirects to that department’s activities page.
+
+The category options are rendered by the activity Blade page and constrained by the database enum/controller rule to `health_service`, `support`, and `additional`. Time standards must be numeric and at least 0.01 hours. Annual volume must be an integer of at least 1 for Health Service and Additional; it may be blank for Support. A support time standard is treated by the service as hours per shift, even though the form's generic label says hours per occurrence—explain this special case.
+
+**Edit path:** click Edit → `GET /departments/{department}/activities/{activity}/edit` → `WorkloadActivityController@edit` → `resources/views/activities/edit.blade.php`. Save the edit → the form sends `PUT /departments/{department}/activities/{activity}` using `@method('PUT')` → `WorkloadActivityController@update` validates and calls `$activity->update($validated)`.
+
+**Delete path:** submit the row's delete form → `DELETE /departments/{department}/activities/{activity}` using `@method('DELETE')` → `WorkloadActivityController@destroy` → `$activity->delete()`. The page reloads without that activity. Deleting an activity changes future calculations but does not create a separately stored WISN result.
+
+**Training checks:** try submitting a Health Service activity without an annual volume; the controller should reject it. Then add a Support activity with the volume blank; that is allowed. The activity list and stepper should update after a successful save.
+
+### Step 6 — Return to the annual WISN Dashboard
+
+Click **Dashboard**. The full route-to-result path is:
+
+```text
+GET /dashboard (route name dashboard)
+  → DashboardController@index
+  → Department::with('activities')->get()
+  → WisnCalculatorService::calculateDepartmentStaffing() for each department
+  → aggregate totals and facility ratio
+  → resources/views/dashboard.blade.php
+```
+
+The service reads AWT from the Department accessor and the saved `WorkloadActivity` rows. It calculates HS standard workload and FTE, support allowance (CAF), additional FTE, total required staff, and the WISN ratio. The calculation is performed when the page is requested; no WISN-results table is written. Department edits and activity additions therefore affect the next dashboard/report calculation.
+
+For **Medical Ward** with the practice values above:
+
+```text
+AWT                  = 1,696 hours
+HS standard workload = 1,696 / 0.50 = 3,392 occurrences/nurse/year
+HS FTE               = 6,000 / 3,392 ≈ 1.7689
+Support fraction     = 0.50 / 8 = 0.0625; CAF = 1 / (1 - 0.0625) ≈ 1.0667
+Additional FTE       = (160 × 0.25) / 1,696 ≈ 0.0236
+Required              = (1.7689 × 1.0667) + 0.0236 ≈ 1.91 nurses
+WISN ratio            = 2 current / 1.91 required ≈ 1.05
+```
+
+The Medical Ward row should show about **1.91 required** and **1.05 WISN ratio**, with status `surplus` because the unrounded ratio is greater than 1. Other departments with no activities have no meaningful requirement (`no_data` in the service). The facility total is calculated from total current divided by total required—not by averaging departmental ratios.
+
+**Show:** `DashboardController@index`, `WisnCalculatorService::calculateDepartmentStaffing()`, the `Department` AWT accessor, `WorkloadActivity` relation, and `resources/views/dashboard.blade.php`.
+
+### Step 7 — Generate and inspect the PDF report
+
+On the Dashboard click **Download Report** (or the report link in navigation). This is `GET /report`, named `report.generate`.
+
+1. `ReportController@generate` loads departments and activities.
+2. It calls the same `WisnCalculatorService` used by the Dashboard.
+3. It adds the six input values as an AWT breakdown and calculates facility totals.
+4. `Pdf::loadView('reports.wisn-summary', $data)` renders `resources/views/reports/wisn-summary.blade.php` through DomPDF.
+5. Laravel returns a download named `WISN_Facility_Staffing_Report.pdf`.
+
+The report is generated from current data at download time; it does not write another calculation row. It is an **annual WISN report**, not an Operations census report. Open the downloaded file and compare Medical Ward’s requirement and ratio to the Dashboard.
+
+**Show:** the Dashboard link → `routes/web.php` → `ReportController@generate` → `WisnCalculatorService` → `resources/views/reports/wisn-summary.blade.php` → PDF download.
+
+### Step 8 — Open Operations and understand the empty standard state
+
+Click **Operations** in the main navigation. This sends `GET /operations` to `OperationalDashboardController@index`; it selects the facility-local date and shift, filters out `outpatient`, loads the latest snapshots, applicable standards, and recommendations, then renders `resources/views/operations/index.blade.php`.
+
+- Medical Ward and Surgical Ward should appear because they are inpatient units.
+- OPD should not appear in the Operations entry table.
+- The initial target-standard list is empty; the app should say that no requirement will be calculated until an approved standard is configured.
+- A 12:00 AM selection is census-only. 7:00 AM and 7:00 PM also ask for nurses who actually came on duty.
+
+The `operational_unit_type`, not the broad Department Type field, determines whether a department is OPD and which standard lookup applies. Emergency is intended for admitted/observation-bed patients, not walk-ins.
+
+**Show:** `OperationalDashboardController@index`, `OperationalRound::SHIFTS`, the query that excludes `outpatient`, and the empty/target-warning states in `resources/views/operations/index.blade.php`.
+
+### Step 9 — Configure test-only standards as the administrator (optional)
+
+Skip this step if you only want to test census capture. With no standard, Operations still saves patient and on-duty counts but correctly leaves required nurses blank and produces no target-based proposal.
+
+To demonstrate calculations and a count recommendation, only use the following invented standards in an isolated practice database. **Do not use these ratios as hospital policy.**
+
+1. On the Operations page select **Configure target ratios**. The link is shown to `is_admin` users.
+2. `GET /operations/standards` passes through `auth`, `verified`, and `admin` middleware. `EnsureUserIsAdmin` checks `users.is_admin`; `OperationalStaffingStandardController@index` supplies inpatient unit labels, supported day/night shifts, and saved standards to `resources/views/operations/standards.blade.php`.
+3. Enter a day standard for General inpatient ward: `patients per nurse = 4`, minimum `1`, source name `TRAINING ONLY — not a clinical policy`, version `demo`, effective-from date equal to the selected census date, no end date, activate/approve checked.
+4. Add another day standard for Surgical ward: `patients per nurse = 3`, minimum `1`, with the same clear training-only source label and date.
+5. Save each. `POST /operations/standards` validates the fields and writes through `OperationalStaffingStandardController@store` and the `OperationalStaffingStandard` model. If activated, the authenticated admin ID and time are stored as approval metadata. This is a demonstration of the software's approval mechanism, not evidence of clinical approval.
+6. Return to Operations and confirm that the unit/shift targets and source/version are visible. Midnight never uses these standards.
+
+The real application intentionally does not ship with a default patient-to-nurse ratio. In a real facility, only the locally governed, source-backed ratio should be activated.
+
+### Step 10 — Enter midnight census
+
+Select the current facility date and **Midnight census (12:00 AM)**. Enter a directly observed patient count for every inpatient unit in the table and save.
+
+- This submits `POST /operations/snapshots` (`operations.snapshots.store`).
+- `OperationalSnapshotController@store` validates date, shift, all unit IDs, patient counts, and notes. On midnight it does not require or save on-duty staff.
+- `OperationalStaffingService::recordRound()` stores the `OperationalRound` and one `DepartmentOperationalSnapshot` per inpatient unit inside a transaction. It sets the scheduled observation time to midnight in `OPERATIONS_TIMEZONE`.
+- The `OperationalRound` and snapshot models connect the date/shift to units, user, and historical target reference.
+- The controller redirects to the selected date/shift on Operations.
+
+Midnight is an exact observed census, not a count derived from admissions or discharges. No required staffing or move suggestion should be produced for the midnight round.
+
+### Step 11 — Enter 7 AM census and actual on-duty counts
+
+Choose **Day handover (7:00 AM)**. Enter the patient census and actual nurses who came on duty for **every inpatient unit**, then save. OPD is not part of the form. The controller checks the unit list submitted by the browser exactly matches the current inpatient-unit set; if it changed while the form was open, reload the page and enter the complete set.
+
+Use these figures only with the two training-only standards from Step 9:
+
+| Inpatient unit | Patients observed | Nurses actually on duty | Training target | Calculated requirement | Balance |
+|---|---:|---:|---:|---:|---:|
+| Medical Ward | 4 | 3 | 1 nurse per 4 patients; min 1 | 1 | 2 above target |
+| Surgical Ward | 9 | 1 | 1 nurse per 3 patients; min 1 | 3 | 2 below target |
+
+The formula is `max(minimum nurses, ceil(patients / patients per nurse))`. When the standards apply, the service can create a pending aggregate suggestion for 2 staff from Medical Ward to Surgical Ward. This is only a software demonstration; it is not a safe real-world instruction.
+
+**Code trace:** `POST /operations/snapshots` → `OperationalSnapshotController@store` → `OperationalStaffingService::recordRound()` → `OperationalStaffingStandard::currentFor()` → snapshots and recommendations → redirect back to Operations.
+
+### Step 12 — Understand 7 PM and recommendation review
+
+The **Night handover (7:00 PM)** uses the same route and validation but is a separate date/shift round. Enter a new direct patient census and actual night-shift on-duty count for every inpatient unit. It does not carry day counts forward automatically.
+
+If a current recommendation appears:
+
+1. Read its source unit, destination unit, count, rationale, status, and freshness message.
+2. A user with an authenticated session may submit approve or decline with an optional note. The relevant POST route reaches `MobilizationRecommendationController`, which calls `OperationalStaffingService`.
+3. Approval is recorded only after the service confirms the recommendation is still pending, the round is the latest complete staffed handover, it is within the configured freshness window, the inpatient-unit set is unchanged, the saved staffing standards still apply, and the proposed counts do not breach source or destination requirements.
+4. The review writes reviewer/time/note and status to the recommendation. It does not alter on-duty headcount, department `current_staff`, schedule, or roster.
+5. A new round or a staffing-standard status/version change supersedes pending recommendations.
+
+**Important timing:** freshness is measured from the scheduled `observed_at` time (7:00 AM or 7:00 PM), not from when you typed the form. With the default 30-minute setting, a 7:00 AM round is considered stale at 7:30 AM. A late-entered historical round may still be saved, but its move recommendation cannot be approved as fresh. For a timely approval test, arrange the demo close to a handover. Any larger freshness setting should be confined to a local test environment and restored before real use.
+
+### Step 13 — Review history and distinguish the three staffing concepts
+
+Use the date picker/timeline to review the latest midnight, day, and night records for that date. If a census is corrected and saved again, the latest revision is displayed while older rounds remain stored. A new department/unit after the round changes the required complete-unit set and blocks recommendation approval until a full new round is recorded.
+
+Keep these values separate when explaining the screen:
+
+- `departments.current_staff`: annual WISN planning headcount.
+- `department_operational_snapshots.on_duty_staff`: actual nurses present at the selected 7 AM or 7 PM handover.
+- `calculated_required_staff`: target-based shift requirement for a specific census/round, only when an applicable approved target exists.
+
+None is a substitute for another. Operations does not update the WISN dashboard totals.
+
+### Step 14 — Open Admin Profile, User Profile, and log out
+
+There is no separate “Admin Profile” page. An administrator uses the same **Profile Settings** page as any other signed-in user; the `is_admin` flag only reveals the target-configuration link and authorizes the `/operations/standards` routes.
+
+1. Open the user menu and click **Profile**. `GET /profile` → `ProfileController@edit` → `resources/views/profile/edit.blade.php`, which includes three partial forms.
+2. **Profile information:** save name/email. The form sends `PATCH /profile`; `ProfileController@update` uses `ProfileUpdateRequest`, fills the current user, clears `email_verified_at` if email changes, saves, and redirects back. It does not edit `is_admin`.
+3. **Password:** enter current/new/confirmation. The form sends `PUT /password` to Breeze's `Auth\PasswordController@update` and shows validation/status feedback.
+4. **Delete account:** the form sends `DELETE /profile` to `ProfileController@destroy`; it requires the current password, logs out, deletes the user, and invalidates the session. **Do not test account deletion on the only administrator**, or you may remove your only admin login.
+5. Optional: `/register` uses Breeze's `RegisteredUserController`; newly registered users receive the database default `is_admin=false`. There is no application screen to promote them to administrator. The current User model also does not implement `MustVerifyEmail`, so treat the `verified` middleware behavior as a caveat, not as guaranteed email enforcement.
+6. Use the navigation logout action. `POST /logout` calls `AuthenticatedSessionController@destroy`, logs out, invalidates the session, and returns to `/`.
+
+**Show:** `routes/web.php`, `routes/auth.php`, `ProfileController`, `ProfileUpdateRequest`, the three `resources/views/profile/partials/` forms, `User.php`, and `EnsureUserIsAdmin.php`. Explain that registration/profile fields do not include an admin-role switch.
+
+### Final verification checklist for this clean-data run
+
+- [ ] I did not run `migrate:fresh` or `DatabaseSeeder` again after beginning manual entry.
+- [ ] I created at least two inpatient units and one optional OPD test department.
+- [ ] I know where the Department Type choices and Operations classification choices are defined.
+- [ ] I can explain how the six AWT values produce 1,696 hours in the example.
+- [ ] I added one Health Service activity, one Support activity, and one Additional activity and can state why Support has no annual volume.
+- [ ] The dashboard updated after the saved data; I can trace its route, controller, service, model relations, and view.
+- [ ] I downloaded the WISN PDF and can tell that it is generated from current WISN data, not Operations.
+- [ ] I saw that Operations excludes OPD and uses direct census at midnight and the two handovers.
+- [ ] I left targets blank unless I deliberately used clearly labelled training-only standards in a disposable database.
+- [ ] I understand that an approved move is still only an aggregate human review and changes no nurse roster or actual counts.
+- [ ] I checked the same Profile Settings page as admin and understand why it is not a separate Admin Profile page.
+- [ ] I did not delete the only administrator account.
+
+### Presenter file order for this practical walkthrough
+
+| Order | Open this file | Point out / say |
+|---:|---|---|
+| 1 | `routes/auth.php`, `AuthenticatedSessionController.php`, `LoginRequest.php` | GET login displays the form; POST authenticates and redirects. |
+| 2 | `routes/web.php`, `DepartmentController.php`, `Department.php` | Department list/create/store; explain both type fields, AWT input storage, accessor, and validations. |
+| 3 | `resources/views/departments/create.blade.php`, `edit.blade.php` | Show hard-coded Department Type options, Model-provided Operations options, input defaults, live preview. |
+| 4 | `WorkloadActivityController.php`, `WorkloadActivity.php`, `WisnCalculatorService.php` | Nested activity routes, validation, relation create/update/delete, calculation inputs. |
+| 5 | `DashboardController.php`, `dashboard.blade.php` | Per-department service call, facility aggregation, chart/table output. |
+| 6 | `ReportController.php`, `reports/wisn-summary.blade.php` | Same service, DomPDF template, download response. |
+| 7 | `OperationalDashboardController.php`, `OperationalSnapshotController.php`, `OperationalStaffingService.php` | Three census times, full-unit validation, target lookup, saved snapshot, aggregate proposal. |
+| 8 | `OperationalStaffingStandardController.php`, `OperationalStaffingStandard.php`, `EnsureUserIsAdmin.php` | Admin-only target configuration and source/effective/approval metadata. |
+| 9 | `MobilizationRecommendationController.php`, `MobilizationRecommendation.php` | Human review and audit; no staffing or roster mutation. |
+| 10 | `ProfileController.php`, `ProfileUpdateRequest.php`, auth profile partials, `User.php` | One profile for admins and users; profile/password/delete behavior and role boundary. |
+
+**Teaching sentence to repeat:** “The page form collects input; the route chooses a controller; the controller validates and coordinates; a model relationship writes or reads database rows; a service calculates business results; and Blade displays the response. For the PDF route, DomPDF renders a Blade template and returns a download.”
+
+---
+
+## 15. Security, testing, and quality questions
 
 ### What the code does
 
@@ -719,7 +997,7 @@ A test file existing is not the same as a passing test run. Before the presentat
 
 ---
 
-## 15. Evaluator questions and ready-to-say answers
+## 16. Evaluator questions and ready-to-say answers
 
 Use the answer in quotes as the first response. Add detail only if the evaluator asks for it.
 
@@ -862,7 +1140,7 @@ Use the answer in quotes as the first response. Add detail only if the evaluator
 
 ---
 
-## 16. Short presentation script
+## 17. Short presentation script
 
 ### Opening (about 45–60 seconds)
 
@@ -878,7 +1156,7 @@ Use the answer in quotes as the first response. Add detail only if the evaluator
 
 ---
 
-## 17. Last-minute rehearsal checklist
+## 18. Last-minute rehearsal checklist
 
 ### Explain
 
@@ -907,7 +1185,7 @@ Use the answer in quotes as the first response. Add detail only if the evaluator
 
 ---
 
-## 18. Quick glossary
+## 19. Quick glossary
 
 | Word | Meaning in this project |
 |---|---|
@@ -929,7 +1207,7 @@ Use the answer in quotes as the first response. Add detail only if the evaluator
 
 ---
 
-## 19. Final sources to keep open during teaching
+## 20. Final sources to keep open during teaching
 
 - `ARCHITECTURE.md` — implementation architecture and the new operational overlay.
 - `WISN_Core_Project_Report.md` — project rationale, objectives, methodology context, and design discussion.
